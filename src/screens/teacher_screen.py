@@ -5,7 +5,7 @@ from src.ui.base_layout import style_background_dashboard, style_base_layout
 from src.components.header import header_dashboard
 from src.components.footer import footer_dashboard
 from src.components.subject_card import subject_card
-from src.database.db import check_teacher_exists, create_teacher, teacher_login, get_teacher_subjects, get_attendance_for_teacher
+from src.database.db import check_teacher_exists, create_teacher, teacher_login, get_teacher_subjects, get_attendance_for_teacher, get_attendance_with_student_for_teacher
 from src.components.dialog_create_subject import create_subject_dialog
 from src.components.dialog_share_subject import share_subject_dialog
 from src.components.dialog_add_photo import add_photos_dialog
@@ -236,52 +236,231 @@ def teacher_tab_manage_subjects():
 
 
 def teacher_tab_attendance_records():
-    st.header('Attendance Records')
+    st.header('Attendance Records & Reports')
 
     teacher_id = st.session_state.teacher_data['teacher_id']
 
+    # Fetch subjects
+    subjects = get_teacher_subjects(teacher_id)
+    
+    # Fetch records
     records = get_attendance_for_teacher(teacher_id)
 
     if not records:
+        st.info("No attendance records found yet. Start taking attendance to generate reports!")
         return
-    
-    data = []
 
-    for r in records:
-        ts = r.get('timestamp')
+    # Tabs for different report views
+    tab_overview, tab_subject_report, tab_session_report = st.tabs([
+        "📅 Sessions Overview", 
+        "📊 Subject Matrix Report", 
+        "📝 Detailed Session Report"
+    ])
 
-        data.append({
-            "ts_group": ts.split(".")[0] if ts else None,
-            "Time": datetime.fromisoformat(ts).strftime("%Y-%m-%d %I:%M %p") if ts else "N'A",
-            "Subject": r['subjects']['name'],
-            "Subject Code":r['subjects']['subject_code'],
-            "is_present": bool(r.get('is_present', False))
-        })
+    # 1. Sessions Overview Tab
+    with tab_overview:
+        st.subheader("All Class Sessions")
+        
+        data = []
+        for r in records:
+            ts = r.get('timestamp')
+            data.append({
+                "ts_group": ts.split(".")[0] if ts else None,
+                "Time": datetime.fromisoformat(ts).strftime("%Y-%m-%d %I:%M %p") if ts else "N/A",
+                "Subject": r['subjects']['name'],
+                "Subject Code": r['subjects']['subject_code'],
+                "is_present": bool(r.get('is_present', False))
+            })
 
+        df = pd.DataFrame(data)
+        summary = (
+            df.groupby(['ts_group', 'Time', 'Subject', 'Subject Code'])
+            .agg(
+                Present_Count = ('is_present', 'sum'),
+                Total_Count = ('is_present', 'count')
+            ).reset_index()
+        )
 
-    df = pd.DataFrame(data)
+        summary['Attendance Stats'] = (
+            "✅ " + summary['Present_Count'].astype(str) + " / "
+            + summary['Total_Count'].astype(str) + ' Students'
+        )
 
+        display_df = (summary.sort_values(by='ts_group', ascending=False)
+                      [['Time', 'Subject', 'Subject Code', 'Attendance Stats']])
+        
+        st.dataframe(display_df, width='stretch', hide_index=True)
 
+        # Download button for summary of sessions
+        export_summary = display_df.copy()
+        csv_summary = export_summary.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Export Sessions Overview (CSV)",
+            data=csv_summary,
+            file_name=f"sessions_overview_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_sessions_overview"
+        )
 
-    summary = (
-        df.groupby(['ts_group', 'Time', 'Subject', 'Subject Code'])
-        .agg(
-            Present_Count = ('is_present', 'sum'),
-            Total_Count =('is_present', 'count')
-        ).reset_index()
+    # 2. Subject Matrix Report Tab
+    with tab_subject_report:
+        st.subheader("Subject-wise Attendance Grid")
+        if not subjects:
+            st.warning("No subjects found.")
+        else:
+            subject_options = {f"{s['name']} - {s['subject_code']}": s for s in subjects}
+            selected_sub_label = st.selectbox(
+                'Select Subject for Matrix Report', 
+                options=list(subject_options.keys()),
+                key='matrix_subject_select'
+            )
+            selected_sub = subject_options[selected_sub_label]
+            selected_subject_id = selected_sub['subject_id']
 
-    )
+            with st.spinner('Generating report...'):
+                # Get all enrolled students for this subject
+                enrolled_res = supabase.table('subject_students').select("*, students(*)").eq('subject_id', selected_subject_id).execute()
+                enrolled_students = enrolled_res.data
 
-    summary['Attendance Stats'] = (
-        "✅ " + summary['Present_Count'].astype(str) + " /"
-        + summary['Total_Count'].astype(str) + ' Students'
-    )
+                # Get all logs for this subject
+                logs_res = supabase.table('attendance_logs').select("*, students(*)").eq('subject_id', selected_subject_id).execute()
+                logs = logs_res.data
 
-    display_df = ( summary.sort_values(by='ts_group' ,ascending=False)
-                  [['Time', 'Subject', 'Subject Code', 'Attendance Stats']]
-                  )
-    
-    st.dataframe(display_df, width='stretch', hide_index=True)
+            if not enrolled_students:
+                st.warning("No students are enrolled in this subject.")
+            elif not logs:
+                st.info("No attendance logs found for this subject yet.")
+            else:
+                # Find all unique timestamps (sessions) for this subject
+                timestamps = sorted(list(set(log['timestamp'] for log in logs)))
+                formatted_ts_headers = [datetime.fromisoformat(ts).strftime("%Y-%m-%d %I:%M %p") for ts in timestamps]
+
+                # Map timestamp to its formatted name
+                ts_map = dict(zip(timestamps, formatted_ts_headers))
+
+                # Build the matrix
+                matrix_rows = []
+                for node in enrolled_students:
+                    student = node['students']
+                    s_id = student['student_id']
+                    s_name = student['name']
+
+                    row = {
+                        "Student ID": s_id,
+                        "Student Name": s_name
+                    }
+
+                    # Check attendance for each session
+                    attended_count = 0
+                    for ts in timestamps:
+                        # Find log for this student and timestamp
+                        log_entry = next((l for l in logs if l['student_id'] == s_id and l['timestamp'] == ts), None)
+                        if log_entry and log_entry.get('is_present'):
+                            row[ts_map[ts]] = "✅ Present"
+                            attended_count += 1
+                        else:
+                            row[ts_map[ts]] = "❌ Absent"
+
+                    row["Total Classes"] = len(timestamps)
+                    row["Attended"] = attended_count
+                    row["Attendance Rate (%)"] = round((attended_count / len(timestamps)) * 100, 2) if len(timestamps) > 0 else 0.0
+
+                    matrix_rows.append(row)
+
+                matrix_df = pd.DataFrame(matrix_rows)
+                st.dataframe(matrix_df, width='stretch', hide_index=True)
+
+                # Export Subject Matrix as CSV
+                csv_matrix = matrix_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label=f"📥 Export {selected_sub['name']} Report (CSV)",
+                    data=csv_matrix,
+                    file_name=f"attendance_report_{selected_sub['name'].replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    key="download_subject_matrix"
+                )
+
+    # 3. Session-Level Detailed Report Tab
+    with tab_session_report:
+        st.subheader("Detailed Session Attendance")
+        
+        # We need a list of unique sessions (timestamp, subject) from records
+        detailed_records = get_attendance_with_student_for_teacher(teacher_id)
+        
+        if not detailed_records:
+            st.info("No session logs found.")
+        else:
+            # Group by timestamp and subject
+            sessions_dict = {}
+            for r in detailed_records:
+                ts = r.get('timestamp')
+                sub_name = r['subjects']['name']
+                sub_code = r['subjects']['subject_code']
+                sub_id = r['subject_id']
+                key = (ts, sub_id, sub_name, sub_code)
+                if key not in sessions_dict:
+                    sessions_dict[key] = []
+                sessions_dict[key].append(r)
+
+            # Sort sessions chronologically descending
+            sorted_keys = sorted(sessions_dict.keys(), key=lambda x: x[0], reverse=True)
+            
+            session_labels = {
+                f"{datetime.fromisoformat(k[0]).strftime('%Y-%m-%d %I:%M %p')} - {k[2]} ({k[3]})": k
+                for k in sorted_keys
+            }
+
+            selected_session_label = st.selectbox(
+                'Select Session to View Details',
+                options=list(session_labels.keys()),
+                key='session_detail_select'
+            )
+            
+            selected_key = session_labels[selected_session_label]
+            session_logs = sessions_dict[selected_key]
+            
+            # Show details
+            session_ts, session_sub_id, session_sub_name, session_sub_code = selected_key
+            
+            st.write(f"**Subject:** {session_sub_name} ({session_sub_code})")
+            st.write(f"**Date/Time:** {datetime.fromisoformat(session_ts).strftime('%Y-%m-%d %I:%M %p')}")
+            
+            session_data = []
+            present_count = 0
+            for log in session_logs:
+                student = log.get('students')
+                if student:
+                    is_present = log.get('is_present', False)
+                    if is_present:
+                        present_count += 1
+                    session_data.append({
+                        "Student ID": student.get('student_id'),
+                        "Student Name": student.get('name'),
+                        "Status": "✅ Present" if is_present else "❌ Absent"
+                    })
+            
+            session_df = pd.DataFrame(session_data)
+            
+            # Display stats cards/metrics
+            m1, m2, m3 = st.columns(3)
+            with m1:
+                st.metric("Total Students", len(session_df))
+            with m2:
+                st.metric("Present", present_count)
+            with m3:
+                st.metric("Absent", len(session_df) - present_count)
+                
+            st.dataframe(session_df, width='stretch', hide_index=True)
+            
+            # Export session details
+            csv_session = session_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Export Session Details (CSV)",
+                data=csv_session,
+                file_name=f"session_details_{session_sub_name.replace(' ', '_')}_{session_ts.split('.')[0].replace(':', '-')}.csv",
+                mime="text/csv",
+                key="download_session_details"
+            )
 
 
 def login_teacher(username, password):

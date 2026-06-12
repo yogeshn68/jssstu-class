@@ -9,8 +9,8 @@ from src.components.dialog_auto_enroll import auto_enroll_dialog
 
 def main():
     st.set_page_config(
-        page_title='SnapClass - Making Attendance faster using AI',
-        page_icon= "https://i.ibb.co/YTYGn5qV/logo.png"
+        page_title='JSSTU_CLASS - Making Attendance faster using AI',
+        page_icon= "https://image-static.collegedunia.com/public/college_data/images/logos/1583130084jssstu2.jpg"
     )
     if 'login_type' not in st.session_state:
         st.session_state['login_type'] = None

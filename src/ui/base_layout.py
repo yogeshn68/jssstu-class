@@ -1,112 +1,110 @@
 import streamlit as st
 
 
-
 def style_background_home():
 
     st.markdown("""
         <style>
 
-                .stApp {
-                    background: #5865F2 !important;
-                }
+        .stApp {
+            background: white !important;
+        }
 
-                .stApp div[data-testid="stColumn"]{
-                    background-color:#E0E3FF !important;
-                    padding:2.5rem !important;
-                    border-radius: 5rem !important;
-                    }
-        </style>  
+        .stApp div[data-testid="stColumn"]{
+            background-color:white !important;
+            padding:2.5rem !important;
+            border-radius:3rem !important;
+            border:1px solid #E5E7EB !important;
+        }
 
-                """
-            ,unsafe_allow_html=True)
-    
+        </style>
+    """, unsafe_allow_html=True)
+
 
 def style_background_dashboard():
 
     st.markdown("""
         <style>
 
-                .stApp {
-                    background: #E0E3FF !important;
-                }
+        .stApp {
+            background:white !important;
+        }
 
-        </style>  
+        </style>
+    """, unsafe_allow_html=True)
 
-                """
-            ,unsafe_allow_html=True)
-    
-
-    
 
 def style_base_layout():
-# asdasd
+
     st.markdown("""
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Climate+Crisis:YEAR@1979&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
 
-                
-         /* Hide Top Bar of streamlit */
-                
-            #MainMenu, footer, header {
-                visibility: hidden;
-            }
-                
-            .block-container {
-                padding-top:1.5rem !important;    
-            }
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
-            h1 {
-                font-family: 'Climate Crisis', sans-serif !important;
-                font-size: 3.5rem !important;
-                line-height:1.1 1important;
-                margin-bottom:0rem !important;
-            }
-                
+        #MainMenu,
+        footer,
+        header{
+            visibility:hidden;
+        }
 
-            h2 {
-                font-family: 'Climate Crisis', sans-serif !important;
-                font-size: 2rem !important;
-                line-height:0.9 !important;
-                margin-bottom:0rem !important;
-            }
-                
-            h3, h4, p {
-                font-family: 'Outfit', sans-serif;    
-            }
-                
+        html,
+        body,
+        [class*="css"]{
+            font-family:'Poppins',sans-serif !important;
+        }
 
-            button{
-                border-radius: 1.5rem !important;
-                background-color: #5865F2 !important;
-                color: white !important;
-                padding: 10px 20px !important;
-                border: none !important;
-                transition: transform 0.25s ease-in-out !important;
-                }
+        .block-container{
+            padding-top:1.5rem !important;
+        }
 
-            button[kind="secondary"]{
-                border-radius: 1.5rem !important;
-                background-color: #EB459E !important;
-                color: white !important;
-                padding: 10px 20px !important;
-                border: none !important;
-                transition: transform 0.25s ease-in-out !important;
-                }
+        h1{
+            font-family:'Poppins',sans-serif !important;
+            font-size:3rem !important;
+            font-weight:700 !important;
+            color:black !important;
+        }
 
-            button[kind="tertiary"]{
-                border-radius: 1.5rem !important;
-                background-color: black !important;
-                color: white !important;
-                padding: 10px 20px !important;
-                border: none !important;
-                transition: transform 0.25s ease-in-out !important;
-                }
+        h2{
+            font-family:'Poppins',sans-serif !important;
+            font-size:2rem !important;
+            font-weight:600 !important;
+            color:black !important;
+        }
 
-            button:hover{
-                transform :scale(1.05)}
-        </style>  
+        h3,h4,h5,h6,p,label{
+            font-family:'Poppins',sans-serif !important;
+            color:black !important;
+        }
 
-                """
-            ,unsafe_allow_html=True)
+        /* ALL BUTTONS */
+
+        .stButton > button{
+            width:100%;
+            background:white !important;
+            color:black !important;
+            border:1px solid #D1D5DB !important;
+            border-radius:25px !important;
+            font-weight:500 !important;
+            padding:10px 20px !important;
+        }
+
+        .stButton > button:hover{
+            background:#F3F4F6 !important;
+            color:black !important;
+            border:1px solid #9CA3AF !important;
+        }
+
+        /* SELECT BOX */
+
+        .stSelectbox div[data-baseweb="select"]{
+            border-radius:15px !important;
+        }
+
+        /* INPUTS */
+
+        .stTextInput input{
+            border-radius:15px !important;
+        }
+
+        </style>
+    """, unsafe_allow_html=True)
